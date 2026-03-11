@@ -391,18 +391,6 @@ pub fn save_encrypted(json: &str) -> anyhow::Result<PathBuf> {
     crate::fs_util::atomic_write(&path, &encrypted)
         .map_err(|e| anyhow::anyhow!("Failed to write credentials: {e}"))?;
 
-    // Set permissions to 600 on Unix (contains secrets)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)) {
-            eprintln!(
-                "Warning: failed to set file permissions on {}: {e}",
-                path.display()
-            );
-        }
-    }
-
     Ok(path)
 }
 

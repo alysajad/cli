@@ -40,7 +40,19 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
         .map(|p| p.join(&tmp_name))
         .unwrap_or_else(|| std::path::PathBuf::from(&tmp_name));
 
-    std::fs::write(&tmp_path, data)?;
+    {
+        use std::io::Write;
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut file = opts.open(&tmp_path)?;
+        file.write_all(data)?;
+        file.sync_all()?;
+    }
     std::fs::rename(&tmp_path, path)?;
     Ok(())
 }
@@ -56,7 +68,18 @@ pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
         .map(|p| p.join(&tmp_name))
         .unwrap_or_else(|| std::path::PathBuf::from(&tmp_name));
 
-    tokio::fs::write(&tmp_path, data).await?;
+    {
+        use tokio::io::AsyncWriteExt;
+        let mut opts = tokio::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            opts.mode(0o600);
+        }
+        let mut file = opts.open(&tmp_path).await?;
+        file.write_all(data).await?;
+        file.sync_all().await?;
+    }
     tokio::fs::rename(&tmp_path, path).await?;
     Ok(())
 }
