@@ -50,9 +50,11 @@ pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new(""));
     
     // Generate a random suffix for the temporary file
-    let suffix: String = std::iter::repeat_with(rand::random::<char>)
-        .filter(|c| c.is_ascii_alphanumeric())
+    use rand::Rng;
+    let suffix: String = rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
         .take(8)
+        .map(char::from)
         .collect();
     
     let file_name = path
