@@ -63,7 +63,7 @@ pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
     let tmp_name = format!("{}.{}.tmp", file_name.to_string_lossy(), suffix);
     let tmp_path = parent.join(&tmp_name);
 
-    let write_result = async {
+    let write_and_rename = async {
         use tokio::io::AsyncWriteExt;
         let mut opts = tokio::fs::OpenOptions::new();
         opts.write(true).create_new(true); // O_EXCL to prevent TOCTOU
@@ -75,17 +75,13 @@ pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
         let mut file = opts.open(&tmp_path).await?;
         file.write_all(data).await?;
         file.sync_all().await?;
-        Ok::<(), io::Error>(())
-    }.await;
+        tokio::fs::rename(&tmp_path, path).await
+    };
 
-    if write_result.is_err() {
-        let _ = tokio::fs::remove_file(&tmp_path).await;
-        return write_result;
-    }
-
-    match tokio::fs::rename(&tmp_path, path).await {
-        Ok(()) => Ok(()),
+    match write_and_rename.await {
+        Ok(_) => Ok(()),
         Err(e) => {
+            // On any error, try to clean up the temp file.
             let _ = tokio::fs::remove_file(&tmp_path).await;
             Err(e)
         }
