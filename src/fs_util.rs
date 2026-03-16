@@ -45,14 +45,6 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-struct CleanupTmp(std::path::PathBuf);
-
-impl Drop for CleanupTmp {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
-
 /// Async variant of [`atomic_write`] for use with tokio.
 pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new(""));
@@ -69,9 +61,7 @@ pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
     let tmp_name = format!("{}.{}.tmp", file_name.to_string_lossy(), suffix);
     let tmp_path = parent.join(&tmp_name);
 
-    let cleanup = CleanupTmp(tmp_path.clone());
-
-    {
+    let write_result = async {
         use tokio::io::AsyncWriteExt;
         let mut opts = tokio::fs::OpenOptions::new();
         opts.write(true).create_new(true); // O_EXCL to prevent TOCTOU
@@ -83,10 +73,21 @@ pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
         let mut file = opts.open(&tmp_path).await?;
         file.write_all(data).await?;
         file.sync_all().await?;
+        Ok::<(), io::Error>(())
+    }.await;
+
+    if write_result.is_err() {
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        return write_result;
     }
-    tokio::fs::rename(&tmp_path, path).await?;
-    std::mem::forget(cleanup);
-    Ok(())
+
+    match tokio::fs::rename(&tmp_path, path).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            Err(e)
+        }
+    }
 }
 
 #[cfg(test)]
