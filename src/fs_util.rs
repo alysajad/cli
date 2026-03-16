@@ -47,45 +47,11 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
 
 /// Async variant of [`atomic_write`] for use with tokio.
 pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
-    let parent = path.parent().unwrap_or_else(|| std::path::Path::new(""));
-    
-    // Generate a random suffix for the temporary file
-    use rand::Rng;
-    let suffix: String = rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
-        .take(8)
-        .map(char::from)
-        .collect();
-    
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?;
-    let tmp_name = format!("{}.{}.tmp", file_name.to_string_lossy(), suffix);
-    let tmp_path = parent.join(&tmp_name);
-
-    let write_and_rename = async {
-        use tokio::io::AsyncWriteExt;
-        let mut opts = tokio::fs::OpenOptions::new();
-        opts.write(true).create_new(true); // O_EXCL to prevent TOCTOU
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600); // Only applies to new files (which this is, due to create_new)
-        }
-        let mut file = opts.open(&tmp_path).await?;
-        file.write_all(data).await?;
-        file.sync_all().await?;
-        tokio::fs::rename(&tmp_path, path).await
-    };
-
-    match write_and_rename.await {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            // On any error, try to clean up the temp file.
-            let _ = tokio::fs::remove_file(&tmp_path).await;
-            Err(e)
-        }
-    }
+    let path = path.to_path_buf();
+    let data = data.to_vec();
+    tokio::task::spawn_blocking(move || atomic_write(&path, &data))
+        .await
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
 }
 
 #[cfg(test)]
