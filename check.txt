@@ -1,0 +1,33 @@
+    Updating crates.io index
+     Locking 9 packages to latest compatible versions
+      Adding aws-lc-rs v1.16.1
+      Adding aws-lc-sys v0.38.0
+      Adding cmake v0.1.57
+      Adding dunce v1.0.5
+      Adding fs_extra v1.3.0
+      Adding hyper-rustls v0.27.7
+      Adding jobserver v0.1.34
+      Adding rustls-native-certs v0.8.3
+      Adding tokio-rustls v0.26.4
+ Downloading crates ...
+  Downloaded aws-lc-rs v1.16.1
+  Downloaded fs_extra v1.3.0
+  Downloaded jobserver v0.1.34
+  Downloaded cmake v0.1.57
+  Downloaded dunce v1.0.5
+  Downloaded aws-lc-sys v0.38.0
+   Compiling getrandom v0.3.4
+   Compiling cfg-if v1.0.4
+   Compiling fs_extra v1.3.0
+   Compiling dunce v1.0.5
+   Compiling aws-lc-rs v1.16.1
+   Compiling rustls v0.23.37
+    Checking rustls-native-certs v0.8.3
+   Compiling jobserver v0.1.34
+error: dlltool could not create import library with C:\Program Files (x86)\mingw-w64\MinGW\bin\dlltool.exe -d C:\Users\alisa\OneDrive\Desktop\cli\cli\target\debug\deps\rustcmJtPu6\bcryptprimitives.dll_imports.def -D bcryptprimitives.dll -l C:\Users\alisa\OneDrive\Desktop\cli\cli\target\debug\deps\rustcmJtPu6\bcryptprimitives.dll_imports.lib -m i386:x86-64 -f --64 --no-leading-underscore --temp-prefix C:\Users\alisa\OneDrive\Desktop\cli\cli\target\debug\deps\rustcmJtPu6\bcryptprimitives.dll:
+       
+       C:\Program Files (x86)\mingw-w64\MinGW\bin\dlltool.exe: Can't create .lib file: C:\Users\alisa\OneDrive\Desktop\cli\cli\target\debug\deps\rustcmJtPu6\bcryptprimitives.dll_imports.lib: Invalid bfd target␍
+       
+
+error: could not compile `getrandom` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

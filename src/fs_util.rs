@@ -30,57 +30,62 @@ use std::path::Path;
 /// Returns an `io::Error` if the temporary file cannot be written or if the
 /// rename fails.
 pub fn atomic_write(path: &Path, data: &[u8]) -> io::Result<()> {
-    // Derive a sibling tmp path, e.g. `/home/user/.config/gws/credentials.enc.tmp`
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?;
-    let tmp_name = format!("{}.tmp", file_name.to_string_lossy());
-    let tmp_path = path
-        .parent()
-        .map(|p| p.join(&tmp_name))
-        .unwrap_or_else(|| std::path::PathBuf::from(&tmp_name));
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+    let mut tmp_file = tempfile::Builder::new()
+        .prefix(".tmp")
+        .make_in(parent)?;
 
     {
         use std::io::Write;
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        let mut file = opts.open(&tmp_path)?;
-        file.write_all(data)?;
-        file.sync_all()?;
+        tmp_file.write_all(data)?;
+        tmp_file.as_file_mut().sync_all()?;
     }
-    std::fs::rename(&tmp_path, path)?;
+    
+    tmp_file.persist(path).map_err(|e| e.error)?;
     Ok(())
+}
+
+struct CleanupTmp(std::path::PathBuf);
+
+impl Drop for CleanupTmp {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 /// Async variant of [`atomic_write`] for use with tokio.
 pub async fn atomic_write_async(path: &Path, data: &[u8]) -> io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+    
+    // Generate a random suffix for the temporary file
+    let suffix: String = std::iter::repeat_with(rand::random::<char>)
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(8)
+        .collect();
+    
     let file_name = path
         .file_name()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no file name"))?;
-    let tmp_name = format!("{}.tmp", file_name.to_string_lossy());
-    let tmp_path = path
-        .parent()
-        .map(|p| p.join(&tmp_name))
-        .unwrap_or_else(|| std::path::PathBuf::from(&tmp_name));
+    let tmp_name = format!("{}.{}.tmp", file_name.to_string_lossy(), suffix);
+    let tmp_path = parent.join(&tmp_name);
+
+    let cleanup = CleanupTmp(tmp_path.clone());
 
     {
         use tokio::io::AsyncWriteExt;
         let mut opts = tokio::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
+        opts.write(true).create_new(true); // O_EXCL to prevent TOCTOU
         #[cfg(unix)]
         {
-            opts.mode(0o600);
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600); // Only applies to new files (which this is, due to create_new)
         }
         let mut file = opts.open(&tmp_path).await?;
         file.write_all(data).await?;
         file.sync_all().await?;
     }
     tokio::fs::rename(&tmp_path, path).await?;
+    std::mem::forget(cleanup);
     Ok(())
 }
 
