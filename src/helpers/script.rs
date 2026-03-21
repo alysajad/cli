@@ -140,11 +140,20 @@ TIPS:
 }
 
 fn visit_dirs(dir: &Path, files: &mut Vec<serde_json::Value>) -> Result<(), GwsError> {
+    if dir.is_symlink() {
+        return Ok(());
+    }
     if dir.is_dir() {
         for entry in fs::read_dir(dir).context("Failed to read dir")? {
             let entry = entry.context("Failed to read entry")?;
+            let ft = entry.file_type().context("Failed to get file type")?;
+            
+            if ft.is_symlink() {
+                continue; // Skip symlinks to prevent traversal attacks/infinite loops (M-04)
+            }
+            
             let path = entry.path();
-            if path.is_dir() {
+            if ft.is_dir() {
                 visit_dirs(&path, files)?;
             } else if let Some(file_obj) = process_file(&path)? {
                 files.push(file_obj);

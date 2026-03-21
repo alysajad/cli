@@ -243,8 +243,8 @@ pub async fn fetch_discovery_document(
         alt_resp.text().await?
     };
 
-    // Write to cache
-    if let Err(e) = std::fs::write(&cache_file, &body) {
+    // Write to cache atomically to prevent race conditions (M-03)
+    if let Err(e) = crate::fs_util::atomic_write(&cache_file, body.as_bytes()) {
         // Non-fatal: just warn via stderr-safe approach
         let _ = e;
     }
